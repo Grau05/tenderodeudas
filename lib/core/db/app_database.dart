@@ -59,12 +59,14 @@ class AppDatabase extends _$AppDatabase {
   Future<int> updateDebtStatus(int debtId, String status) =>
       (update(debts)..where((t) => t.id.equals(debtId))).write(DebtsCompanion(status: Value(status)));
   Future<Debt?> getDebtById(int id) => (select(debts)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<List<Debt>> getAllDebts() => select(debts).get();
 
   // ========= Payments =========
   Future<int> insertPayment(PaymentsCompanion entry) => into(payments).insert(entry);
   Future<List<Payment>> getPaymentsByDebt(int debtId) =>
       (select(payments)..where((t) => t.debtId.equals(debtId))..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
   Future<int> deletePayment(int id) => (delete(payments)..where((t) => t.id.equals(id))).go();
+  Future<List<Payment>> getAllPayments() => select(payments).get();
 
   // ========= Aggregations =========
   Future<double> sumPaymentsForDebt(int debtId) async {

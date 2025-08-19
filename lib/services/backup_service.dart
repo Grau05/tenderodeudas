@@ -9,10 +9,14 @@ class BackupService {
     
   }
 
+  static Future<File> get backupFile async {
+    final docs = await getApplicationDocumentsDirectory();
+    return File(p.join(docs.path, 'backup_me_debe.sqlite'));
+  }
+
   static Future<File> createBackup() async {
     final db = await databaseFile;
-    final docs = await getApplicationDocumentsDirectory();
-    final backup = File(p.join(docs.path, 'backup_me_debe.sqlite'));
+    final backup = await backupFile;
     return db.copy(backup.path);
   }
 
