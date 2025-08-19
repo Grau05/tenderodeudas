@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:drift/drift.dart' show Value;
 import '../core/db/app_database.dart';
 import '../services/notification_service.dart';
@@ -14,9 +15,16 @@ class DebtProvider extends ChangeNotifier {
   bool get loading => _loading;
   double pendingFor(int debtId) => _pendingByDebt[debtId] ?? 0.0;
 
+  void _notifySafely() {
+    // Evita notificar durante la fase de build; difiere al post-frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (hasListeners) notifyListeners();
+    });
+  }
+
   Future<void> loadByClient(int clientId) async {
     _loading = true;
-    notifyListeners();
+    _notifySafely();
     try {
       _debts = await _db.getDebtsByClient(clientId);
       _pendingByDebt.clear();
@@ -25,7 +33,7 @@ class DebtProvider extends ChangeNotifier {
       }
     } finally {
       _loading = false;
-      notifyListeners();
+      _notifySafely();
     }
   }
 
@@ -53,13 +61,15 @@ class DebtProvider extends ChangeNotifier {
 
   Future<void> refreshDebtPending(int debtId) async {
     _pendingByDebt[debtId] = await _db.pendingAmountForDebt(debtId);
-    notifyListeners();
+    _notifySafely();
   }
 
   Future<void> markPaidIfZero(int debtId) async {
     final pending = await _db.pendingAmountForDebt(debtId);
     if (pending <= 0.0) {
       await _db.updateDebtStatus(debtId, 'pagada');
+      // Cancelar recordatorio si la deuda ya se pagó
+      await NotificationService.cancel(debtId);
     }
   }
 }

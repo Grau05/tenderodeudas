@@ -78,15 +78,17 @@ class _NewDebtScreenState extends State<NewDebtScreen> {
                       ? null
                       : () async {
                           if (!_formKey.currentState!.validate()) return;
+                          final nav = Navigator.of(context);
+                          final debts = context.read<DebtProvider>();
                           final amount = double.parse(_amountCtrl.text.replaceAll(',', '.'));
-                          final ok = await context.read<DebtProvider>().addDebt(
-                                clientId: clientId,
-                                amount: amount,
-                                description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-                                dueDate: _dueDate,
-                              );
+                          final ok = await debts.addDebt(
+                            clientId: clientId,
+                            amount: amount,
+                            description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+                            dueDate: _dueDate,
+                          );
                           if (!mounted) return;
-                          if (ok) Navigator.pop(context, true);
+                          if (ok) nav.pop(true);
                         },
                   icon: const Icon(Icons.save),
                   label: const Text('Guardar'),

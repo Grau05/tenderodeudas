@@ -63,8 +63,33 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       if (v == 'edit') {
                         _showClientForm(context, provider, existingId: c.id, name: c.name, phone: c.phone, address: c.address ?? '');
                       } else if (v == 'archive') {
-                        await provider.archiveClient(c.id);
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Archivar cliente'),
+                            content: const Text('El cliente se ocultará de la lista. ¿Deseas continuar?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Archivar')),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await provider.archiveClient(c.id);
+                        }
                       } else if (v == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Eliminar cliente'),
+                            content: const Text('Esta acción no se puede deshacer. ¿Eliminar definitivamente?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+                            ],
+                          ),
+                        );
+                        if (confirm != true) return;
                         final ok = await provider.deleteClient(c.id);
                         if (!ok && context.mounted) {
                           showDialog(
@@ -153,9 +178,44 @@ void _showClientForm(BuildContext context, ClientProvider provider, {int? existi
                         onPressed: () async {
                           if (!formKey.currentState!.validate()) return;
                           if (existingId == null) {
-                            await provider.addClient(name: nameCtrl.text.trim(), phone: phoneCtrl.text.trim(), address: addrCtrl.text.trim().isEmpty ? null : addrCtrl.text.trim());
+                            // Confirmación suave para crear
+                            final confirm = await showDialog<bool>(
+                              context: ctx,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Crear cliente'),
+                                content: const Text('¿Deseas guardar este nuevo cliente?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+                                ],
+                              ),
+                            );
+                            if (confirm != true) return;
+                            await provider.addClient(
+                              name: nameCtrl.text.trim(),
+                              phone: phoneCtrl.text.trim(),
+                              address: addrCtrl.text.trim().isEmpty ? null : addrCtrl.text.trim(),
+                            );
                           } else {
-                            await provider.updateClient(id: existingId, name: nameCtrl.text.trim(), phone: phoneCtrl.text.trim(), address: addrCtrl.text.trim());
+                            // Confirmación para actualizar
+                            final confirm = await showDialog<bool>(
+                              context: ctx,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Actualizar cliente'),
+                                content: const Text('Se guardarán los cambios realizados. ¿Continuar?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Actualizar')),
+                                ],
+                              ),
+                            );
+                            if (confirm != true) return;
+                            await provider.updateClient(
+                              id: existingId,
+                              name: nameCtrl.text.trim(),
+                              phone: phoneCtrl.text.trim(),
+                              address: addrCtrl.text.trim(),
+                            );
                           }
                           if (context.mounted) Navigator.pop(ctx);
                         },

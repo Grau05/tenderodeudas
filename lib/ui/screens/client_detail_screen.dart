@@ -92,24 +92,92 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               const Divider(height: 1),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     ElevatedButton.icon(
                       onPressed: () {
+                        final dp = context.read<DebtProvider>();
                         Navigator.pushNamed(context, NewDebtScreen.routeName, arguments: client.id)
-                            .then((_) => context.read<DebtProvider>().loadByClient(client.id));
+                            .then((_) {
+                          if (!mounted) return;
+                          dp.loadByClient(client.id);
+                        });
                       },
                       icon: const Icon(Icons.add_card),
                       label: const Text('Agregar deuda'),
                     ),
-                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () {
+                        final dp = context.read<DebtProvider>();
                         Navigator.pushNamed(context, RegisterPaymentScreen.routeName, arguments: client.id)
-                            .then((_) => context.read<DebtProvider>().loadByClient(client.id));
+                            .then((_) {
+                          if (!mounted) return;
+                          dp.loadByClient(client.id);
+                        });
                       },
                       icon: const Icon(Icons.attach_money),
                       label: const Text('Registrar pago'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // Preparar mensaje y permitir previsualización/edición
+                        final template = context.read<SettingsProvider>().whatsappTemplate;
+                        final clientProv = context.read<ClientProvider>();
+                        final debtsProv = context.read<DebtProvider>();
+                        final pendingTotal = await clientProv.totalPendienteCliente(client.id);
+                        DateTime dueDate = DateTime.now();
+                        final withPending = debtsProv.debts
+                            .where((d) => debtsProv.pendingFor(d.id) > 0)
+                            .toList();
+                        if (withPending.isNotEmpty) {
+                          withPending.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+                          dueDate = withPending.first.dueDate;
+                        }
+                        // Construir mensaje usando el servicio para respetar formato local
+                        final dateStr = Fmt.date(dueDate);
+                        final amountStr = Fmt.money(pendingTotal);
+                        final effectiveTemplate = (template.isEmpty)
+                            ? 'Hola [NombreCliente], tienes un saldo pendiente de [MontoPendiente] con fecha [Fecha]. Por favor contáctame para coordinar el pago. Gracias.'
+                            : template;
+                        final initialMessage = effectiveTemplate
+                            .replaceAll('[NombreCliente]', client.name)
+                            .replaceAll('[MontoPendiente]', amountStr)
+                            .replaceAll('[Fecha]', dateStr);
+
+                        final controller = TextEditingController(text: initialMessage);
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) {
+                            return AlertDialog(
+                              title: const Text('Previsualizar mensaje'),
+                              content: TextField(
+                                controller: controller,
+                                maxLines: 6,
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.of(ctx).pop(true),
+                                  child: const Text('Enviar'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (confirmed == true) {
+                          await WhatsAppService.sendRaw(
+                            phone: client.phone,
+                            message: controller.text,
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.chat),
+                      label: const Text('Enviar recordatorio'),
                     ),
                   ],
                 ),
@@ -132,7 +200,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                               ? '🟢'
                               : (isOverdue ? '🔴' : '🟡');
                           return ListTile(
-                            title: Text('${statusIcon} ${Fmt.money(d.amount)}  (Pendiente: ${Fmt.money(pending)})'),
+                            title: Text('$statusIcon ${Fmt.money(d.amount)}  (Pendiente: ${Fmt.money(pending)})'),
                             subtitle: Text('Vence: ${Fmt.date(d.dueDate)}  • ${d.description ?? ''}'),
                             trailing: Icon(Icons.circle, color: color, size: 12),
                           );

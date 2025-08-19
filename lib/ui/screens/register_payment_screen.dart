@@ -53,7 +53,7 @@ class _RegisterPaymentScreenState extends State<RegisterPaymentScreen> {
                 child: Column(
                   children: [
                     DropdownButtonFormField<int>(
-                      value: _selectedDebtId,
+                      initialValue: _selectedDebtId,
                       decoration: const InputDecoration(labelText: 'Deuda'),
                       items: debts
                           .map((d) => DropdownMenuItem(
@@ -94,17 +94,20 @@ class _RegisterPaymentScreenState extends State<RegisterPaymentScreen> {
                             ? null
                             : () async {
                                 if (!_formKey.currentState!.validate()) return;
+                                final nav = Navigator.of(context);
+                                final payments = context.read<PaymentProvider>();
+                                final debtsReader = context.read<DebtProvider>();
                                 final debtId = _selectedDebtId!;
                                 final amount = double.parse(_amountCtrl.text.replaceAll(',', '.'));
-                                final ok = await context.read<PaymentProvider>().addPayment(
-                                      debtId: debtId,
-                                      amount: amount,
-                                      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-                                    );
-                                await context.read<DebtProvider>().refreshDebtPending(debtId);
-                                await context.read<DebtProvider>().markPaidIfZero(debtId);
+                                final ok = await payments.addPayment(
+                                  debtId: debtId,
+                                  amount: amount,
+                                  note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+                                );
+                                await debtsReader.refreshDebtPending(debtId);
+                                await debtsReader.markPaidIfZero(debtId);
                                 if (!mounted) return;
-                                if (ok) Navigator.pop(context, true);
+                                if (ok) nav.pop(true);
                               },
                         icon: const Icon(Icons.save),
                         label: const Text('Guardar'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/backup_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   static const routeName = '/settings';
@@ -54,16 +55,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
                     try {
                       final file = await BackupService.createBackup();
                       await s.setLastBackup(DateTime.now());
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(content: Text('Respaldo creado: ${file.path}')),
                       );
                     } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(content: Text('Error al respaldar: $e')),
                       );
                     }
@@ -76,24 +76,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
                     try {
                       final backup = await BackupService.backupFile;
                       if (!await backup.exists()) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           const SnackBar(content: Text('No existe archivo de respaldo')),
                         );
                         return;
                       }
                       await BackupService.restoreBackup(backup);
                       await s.setLastBackup(DateTime.now());
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         const SnackBar(content: Text('Restauración completada. Reinicia la app para ver cambios.')),
                       );
                     } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(content: Text('Error al restaurar: $e')),
                       );
                     }
@@ -103,6 +101,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                final backup = await BackupService.backupFile;
+                if (!await backup.exists()) {
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('No existe archivo de respaldo')),
+                  );
+                  return;
+                }
+                await Share.shareXFiles([XFile(backup.path)], text: 'Respaldo de Me Debe');
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Error al compartir: $e')),
+                );
+              }
+            },
+            icon: const Icon(Icons.share),
+            label: const Text('Compartir respaldo'),
           ),
         ],
       ),
