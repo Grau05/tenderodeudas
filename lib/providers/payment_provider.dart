@@ -3,7 +3,9 @@ import 'package:drift/drift.dart' show Value;
 import '../core/db/app_database.dart';
 
 class PaymentProvider extends ChangeNotifier {
-  final AppDatabase _db = AppDatabase();
+  final AppDatabase _db;
+
+  PaymentProvider(this._db);
 
   List<Payment> _payments = [];
   bool _loading = false;

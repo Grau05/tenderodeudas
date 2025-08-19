@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/client_provider.dart';
+import '../../core/db/app_database.dart';
 import '../../providers/debt_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/whatsapp_service.dart';
@@ -19,12 +20,18 @@ class ClientDetailScreen extends StatefulWidget {
 
 class _ClientDetailScreenState extends State<ClientDetailScreen> {
   int? clientId;
+  Future<Client?>? _clientFuture;
+  bool _inited = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_inited) return;
+    _inited = true;
     clientId = ModalRoute.of(context)!.settings.arguments as int?;
     if (clientId != null) {
+      // Cachear futuros para evitar re-creación constante y estados inconsistentes
+      _clientFuture ??= context.read<ClientProvider>().getById(clientId!);
       context.read<DebtProvider>().loadByClient(clientId!);
     }
   }
@@ -34,16 +41,49 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     if (clientId == null) {
       return const Scaffold(body: Center(child: Text('Cliente no especificado')));
     }
-    return FutureBuilder(
-      future: context.read<ClientProvider>().getById(clientId!),
+    return FutureBuilder<Client?>(
+      future: _clientFuture,
       builder: (ctx, snap) {
-        if (!snap.hasData) {
+        if (snap.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        final client = snap.data!;
+        if (snap.hasError) {
+          return Scaffold(body: Center(child: Text('Error: ${snap.error}')));
+        }
+        final client = snap.data;
+        if (client == null) {
+          return const Scaffold(body: Center(child: Text('Cliente no encontrado')));
+        }
         final debts = context.watch<DebtProvider>();
         return Scaffold(
-          appBar: AppBar(title: Text(client.name)),
+          appBar: AppBar(
+            title: Text(client.name),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.call),
+                onPressed: () async {
+                  final uri = Uri.parse('tel:${client.phone}');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.chat),
+                onPressed: () async {
+                  final template = context.read<SettingsProvider>().whatsappTemplate;
+                  final pendingTotal = await context.read<ClientProvider>().totalPendienteCliente(client.id);
+                  await WhatsAppService.sendReminder(
+                    phone: client.phone,
+                    clientName: client.name,
+                    pendingAmount: pendingTotal,
+                    dueDate: DateTime.now(),
+                    template: template,
+                  );
+                },
+              ),
+            ],
+          ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -62,29 +102,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                           if (client.address != null && client.address!.isNotEmpty) Text(client.address!),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.call),
-                      onPressed: () async {
-                        final uri = Uri.parse('tel:${client.phone}');
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri);
-                        }
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chat),
-                      onPressed: () async {
-                        final template = context.read<SettingsProvider>().whatsappTemplate;
-                        final pendingTotal = await context.read<ClientProvider>().totalPendienteCliente(client.id);
-                        await WhatsAppService.sendReminder(
-                          phone: client.phone,
-                          clientName: client.name,
-                          pendingAmount: pendingTotal,
-                          dueDate: DateTime.now(),
-                          template: template,
-                        );
-                      },
                     ),
                   ],
                 ),
@@ -122,10 +139,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     ),
                     ElevatedButton.icon(
                       onPressed: () async {
+                        final ctx0 = context;
                         // Preparar mensaje y permitir previsualización/edición
-                        final template = context.read<SettingsProvider>().whatsappTemplate;
-                        final clientProv = context.read<ClientProvider>();
-                        final debtsProv = context.read<DebtProvider>();
+                        final template = ctx0.read<SettingsProvider>().whatsappTemplate;
+                        final clientProv = ctx0.read<ClientProvider>();
+                        final debtsProv = ctx0.read<DebtProvider>();
                         final pendingTotal = await clientProv.totalPendienteCliente(client.id);
                         DateTime dueDate = DateTime.now();
                         final withPending = debtsProv.debts
@@ -147,8 +165,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                             .replaceAll('[Fecha]', dateStr);
 
                         final controller = TextEditingController(text: initialMessage);
+                        if (!ctx0.mounted) return;
                         final confirmed = await showDialog<bool>(
-                          context: context,
+                          context: ctx0,
                           builder: (ctx) {
                             return AlertDialog(
                               title: const Text('Previsualizar mensaje'),
@@ -169,6 +188,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                             );
                           },
                         );
+                        if (!mounted) return;
                         if (confirmed == true) {
                           await WhatsAppService.sendRaw(
                             phone: client.phone,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/db/app_database.dart';
@@ -14,16 +15,18 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  final _db = AppDatabase();
+  late final AppDatabase _db;
   bool _loading = false;
   double _totalPendiente = 0;
   double _totalPagado = 0;
   double _totalVencido = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _db = context.read<AppDatabase>();
+    // Cargar cuando el árbol y providers estén listos
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   Future<void> _load() async {
@@ -223,7 +226,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       // Sin datos: mostrar gráfico vacío sin etiquetas
       return [
         PieChartSectionData(
-          color: theme.surfaceVariant,
+          color: theme.surfaceContainerHighest,
           value: 1,
           title: '',
           radius: 50,

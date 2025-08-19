@@ -84,10 +84,14 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<double> totalPending() async {
+    // Optimizado: calcular pagos por deuda en un solo query y sumar en memoria
     final all = await select(debts).get();
+    final ids = all.map((e) => e.id).toList(growable: false);
+    final paidByDebt = await _sumPaymentsByDebtIds(ids);
     double total = 0;
     for (final d in all) {
-      final pending = await pendingAmountForDebt(d.id);
+      final paid = paidByDebt[d.id] ?? 0.0;
+      final pending = (d.amount - paid);
       if (pending > 0) total += pending;
     }
     return total;
@@ -102,9 +106,12 @@ class AppDatabase extends _$AppDatabase {
   Future<double> totalOverdue() async {
     final now = DateTime.now();
     final overdue = await (select(debts)..where((t) => t.dueDate.isSmallerThanValue(now))).get();
+    final ids = overdue.map((e) => e.id).toList(growable: false);
+    final paidByDebt = await _sumPaymentsByDebtIds(ids);
     double total = 0;
     for (final d in overdue) {
-      final pending = await pendingAmountForDebt(d.id);
+      final paid = paidByDebt[d.id] ?? 0.0;
+      final pending = (d.amount - paid);
       if (pending > 0) total += pending;
     }
     return total;
@@ -112,21 +119,59 @@ class AppDatabase extends _$AppDatabase {
 
   Future<bool> hasPendingDebtsForClient(int clientId) async {
     final list = await getDebtsByClient(clientId);
+    if (list.isEmpty) return false;
+    final ids = list.map((e) => e.id).toList(growable: false);
+    final paidByDebt = await _sumPaymentsByDebtIds(ids);
     for (final d in list) {
-      final pending = await pendingAmountForDebt(d.id);
-      if (pending > 0) return true;
+      final paid = paidByDebt[d.id] ?? 0.0;
+      if ((d.amount - paid) > 0) return true;
     }
     return false;
   }
 
   Future<double> clientTotalPending(int clientId) async {
     final list = await getDebtsByClient(clientId);
+    if (list.isEmpty) return 0.0;
+    final ids = list.map((e) => e.id).toList(growable: false);
+    final paidByDebt = await _sumPaymentsByDebtIds(ids);
     double total = 0;
     for (final d in list) {
-      final pending = await pendingAmountForDebt(d.id);
-      total += pending;
+      final paid = paidByDebt[d.id] ?? 0.0;
+      final pending = (d.amount - paid);
+      if (pending > 0) total += pending;
     }
     return total;
+  }
+
+  // ========= Bulk helpers para rendimiento =========
+  Future<Map<int, double>> _sumPaymentsByDebtIds(List<int> debtIds) async {
+    if (debtIds.isEmpty) return {};
+    final sumExpr = payments.amount.sum();
+    final q = await (selectOnly(payments)
+          ..addColumns([payments.debtId, sumExpr])
+          ..where(payments.debtId.isIn(debtIds))
+          ..groupBy([payments.debtId]))
+        .get();
+    final Map<int, double> res = {};
+    for (final row in q) {
+      final id = row.read(payments.debtId)!;
+      final s = row.read(sumExpr) ?? 0.0;
+      res[id] = s;
+    }
+    return res;
+  }
+
+  Future<Map<int, double>> pendingAmountsForDebtIds(List<int> debtIds) async {
+    if (debtIds.isEmpty) return {};
+    final ds = await (select(debts)..where((t) => t.id.isIn(debtIds))).get();
+    final paidByDebt = await _sumPaymentsByDebtIds(debtIds);
+    final Map<int, double> res = {};
+    for (final d in ds) {
+      final paid = paidByDebt[d.id] ?? 0.0;
+      final pending = (d.amount - paid);
+      res[d.id] = pending < 0 ? 0.0 : pending;
+    }
+    return res;
   }
 }
 

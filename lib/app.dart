@@ -7,6 +7,7 @@ import 'providers/navigation_provider.dart';
 import 'providers/debt_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/settings_provider.dart';
+import 'core/db/app_database.dart';
 import 'ui/root_shell.dart';
 import 'ui/screens/clients_screen.dart';
 import 'ui/screens/client_detail_screen.dart';
@@ -22,11 +23,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<AppDatabase>(
+          create: (_) => AppDatabase(),
+          dispose: (_, db) => db.close(),
+        ),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => ClientProvider()),
+        ChangeNotifierProvider(create: (ctx) => ClientProvider(ctx.read<AppDatabase>())),
         ChangeNotifierProvider(create: (_) => NavigationProvider()),
-        ChangeNotifierProvider(create: (_) => DebtProvider()),
-        ChangeNotifierProvider(create: (_) => PaymentProvider()),
+        ChangeNotifierProvider(create: (ctx) => DebtProvider(ctx.read<AppDatabase>())),
+        ChangeNotifierProvider(create: (ctx) => PaymentProvider(ctx.read<AppDatabase>())),
       ],
       child: MaterialApp(
         title: 'Control de Deudas',

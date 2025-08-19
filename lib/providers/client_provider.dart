@@ -3,7 +3,9 @@ import 'package:drift/drift.dart' show Value;
 import '../core/db/app_database.dart';
 
 class ClientProvider extends ChangeNotifier {
-  final AppDatabase _db = AppDatabase();
+  final AppDatabase _db;
+
+  ClientProvider(this._db);
 
   List<Client> _clients = [];
   bool _loading = false;

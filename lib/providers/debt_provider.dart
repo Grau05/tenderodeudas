@@ -1,11 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:drift/drift.dart' show Value;
 import '../core/db/app_database.dart';
-import '../services/notification_service.dart';
 
 class DebtProvider extends ChangeNotifier {
-  final AppDatabase _db = AppDatabase();
+  final AppDatabase _db;
+
+  DebtProvider(this._db);
 
   List<Debt> _debts = [];
   final Map<int, double> _pendingByDebt = {};
@@ -15,25 +15,23 @@ class DebtProvider extends ChangeNotifier {
   bool get loading => _loading;
   double pendingFor(int debtId) => _pendingByDebt[debtId] ?? 0.0;
 
-  void _notifySafely() {
-    // Evita notificar durante la fase de build; difiere al post-frame.
+  Future<void> loadByClient(int clientId) async {
+    _loading = true;
+    // Evita markNeedsBuild durante build cuando se llama desde didChangeDependencies
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (hasListeners) notifyListeners();
     });
-  }
-
-  Future<void> loadByClient(int clientId) async {
-    _loading = true;
-    _notifySafely();
     try {
       _debts = await _db.getDebtsByClient(clientId);
       _pendingByDebt.clear();
-      for (final d in _debts) {
-        _pendingByDebt[d.id] = await _db.pendingAmountForDebt(d.id);
+      if (_debts.isNotEmpty) {
+        final ids = _debts.map((e) => e.id).toList(growable: false);
+        final pendings = await _db.pendingAmountsForDebtIds(ids);
+        _pendingByDebt.addAll(pendings);
       }
     } finally {
       _loading = false;
-      _notifySafely();
+      if (hasListeners) notifyListeners();
     }
   }
 
@@ -49,27 +47,18 @@ class DebtProvider extends ChangeNotifier {
       description: Value(description),
       dueDate: dueDate,
     ));
-    // Programar (placeholder: mostrar ahora). Luego cambiar a programación real.
-    await NotificationService.scheduleDueReminder(
-      id: id,
-      title: 'Vence deuda',
-      body: 'Deuda de $amount para cliente #$clientId',
-      scheduledAt: dueDate,
-    );
     return id > 0;
   }
 
   Future<void> refreshDebtPending(int debtId) async {
     _pendingByDebt[debtId] = await _db.pendingAmountForDebt(debtId);
-    _notifySafely();
+    if (hasListeners) notifyListeners();
   }
 
   Future<void> markPaidIfZero(int debtId) async {
     final pending = await _db.pendingAmountForDebt(debtId);
     if (pending <= 0.0) {
       await _db.updateDebtStatus(debtId, 'pagada');
-      // Cancelar recordatorio si la deuda ya se pagó
-      await NotificationService.cancel(debtId);
     }
   }
 }
