@@ -39,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalVencido = 0;
   List<_UpcomingItem> _upcoming = [];
   // Toggle para aislar rendimiento: desactiva 'Próximos pagos'
-  static const bool _disableUpcoming = true;
+  static const bool _disableUpcoming = false;
 
   @override
   void didChangeDependencies() {
@@ -51,8 +51,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       // Ejecutar en paralelo para reducir el tiempo total de espera
       final fP = _db.totalPending();
@@ -71,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _upcoming = upcoming;
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _loading = false);
     }
   }
 
@@ -124,114 +124,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(title: const Text('Inicio')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Resumen rápido', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (ctx, constraints) {
-                      final isNarrow = constraints.maxWidth < 520;
-                      final cards = [
-                        _StatCard(
-                          title: 'Pendiente',
-                          value: Fmt.money(_totalPendiente),
-                          icon: Icons.hourglass_bottom,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        _StatCard(
-                          title: 'Vencido',
-                          value: Fmt.money(_totalVencido),
-                          icon: Icons.warning_amber_rounded,
-                          color: Colors.amber,
-                        ),
-                        _StatCard(
-                          title: 'Pagado',
-                          value: Fmt.money(_totalPagado),
-                          icon: Icons.check_circle,
-                          color: Colors.green,
-                        ),
-                      ];
-                      if (isNarrow) {
-                        return Column(
+          : RefreshIndicator(
+              onRefresh: () => _load(silent: true),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Resumen rápido', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        final isNarrow = constraints.maxWidth < 520;
+                        final cards = [
+                          _StatCard(
+                            title: 'Pendiente',
+                            value: Fmt.money(_totalPendiente),
+                            icon: Icons.hourglass_bottom,
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
+                          _StatCard(
+                            title: 'Vencido',
+                            value: Fmt.money(_totalVencido),
+                            icon: Icons.warning_amber_rounded,
+                            color: Colors.amber,
+                          ),
+                          _StatCard(
+                            title: 'Pagado',
+                            value: Fmt.money(_totalPagado),
+                            icon: Icons.check_circle,
+                            color: Colors.green,
+                          ),
+                        ];
+                        if (isNarrow) {
+                          return Column(
+                            children: [
+                              for (int i = 0; i < cards.length; i++) ...[
+                                cards[i],
+                                if (i != cards.length - 1) const SizedBox(height: 8),
+                              ]
+                            ],
+                          );
+                        }
+                        return Row(
                           children: [
-                            for (int i = 0; i < cards.length; i++) ...[
-                              cards[i],
-                              if (i != cards.length - 1) const SizedBox(height: 8),
-                            ]
+                            Expanded(child: cards[0]),
+                            const SizedBox(width: 12),
+                            Expanded(child: cards[1]),
+                            const SizedBox(width: 12),
+                            Expanded(child: cards[2]),
                           ],
                         );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: cards[0]),
-                          const SizedBox(width: 12),
-                          Expanded(child: cards[1]),
-                          const SizedBox(width: 12),
-                          Expanded(child: cards[2]),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  if (!_disableUpcoming) ...[
-                    Text('Próximos pagos', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    if (_upcoming.isEmpty)
-                      Text('No hay pagos próximos en los próximos 30 días', style: Theme.of(context).textTheme.bodyMedium)
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _upcoming.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (ctx, i) {
-                          final it = _upcoming[i];
-                          return Card(
-                            child: ListTile(
-                              leading: CircleAvatar(backgroundColor: it.color.withOpacity(0.2), child: Icon(Icons.event, color: it.color)),
-                              title: Text(it.clientName),
-                              subtitle: Text('Vence: ${Fmt.date(it.dueDate)}  • En ${it.daysLeft} días'),
-                              trailing: Icon(Icons.circle, size: 10, color: it.color),
-                              onTap: () => Navigator.pushNamed(context, RegisterPaymentScreen.routeName, arguments: it.clientId),
-                            ),
-                          );
-                        },
-                      ),
-                    const SizedBox(height: 24),
-                  ],
-                  Text('Acciones rápidas', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  GridView(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 3.2,
+                      },
                     ),
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: () => Navigator.pushNamed(context, NewDebtScreen.routeName),
-                        icon: const Icon(Icons.add_card),
-                        label: const Text('Nueva deuda'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: () => Navigator.pushNamed(context, RegisterPaymentScreen.routeName),
-                        icon: const Icon(Icons.payments),
-                        label: const Text('Registrar pago'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: () => context.read<NavigationProvider>().setIndex(1),
-                        icon: const Icon(Icons.search),
-                        label: const Text('Buscar cliente'),
-                      ),
+                    const SizedBox(height: 24),
+                    if (!_disableUpcoming) ...[
+                      Text('Próximos pagos', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      if (_upcoming.isEmpty)
+                        Text('No hay pagos próximos en los próximos 30 días', style: Theme.of(context).textTheme.bodyMedium)
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _upcoming.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (ctx, i) {
+                            final it = _upcoming[i];
+                            return Card(
+                              child: ListTile(
+                                leading: CircleAvatar(backgroundColor: it.color.withOpacity(0.2), child: Icon(Icons.event, color: it.color)),
+                                title: Text(it.clientName),
+                                subtitle: Text('Vence: ${Fmt.date(it.dueDate)}  • En ${it.daysLeft} días'),
+                                trailing: Icon(Icons.circle, size: 10, color: it.color),
+                                onTap: () => Navigator.pushNamed(context, RegisterPaymentScreen.routeName, arguments: it.clientId),
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 24),
                     ],
-                  ),
-                ],
+                    Text('Acciones rápidas', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    GridView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 3.2,
+                      ),
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () => Navigator.pushNamed(context, NewDebtScreen.routeName),
+                          icon: const Icon(Icons.add_card),
+                          label: const Text('Nueva deuda'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: () => Navigator.pushNamed(context, RegisterPaymentScreen.routeName),
+                          icon: const Icon(Icons.payments),
+                          label: const Text('Registrar pago'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: () => context.read<NavigationProvider>().setIndex(1),
+                          icon: const Icon(Icons.search),
+                          label: const Text('Buscar cliente'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
       // NavigationBar persistente se maneja en RootShell
