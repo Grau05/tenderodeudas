@@ -173,6 +173,13 @@ class AppDatabase extends _$AppDatabase {
     }
     return res;
   }
+
+  // Ejecutar una sentencia SQL personalizada
+  Future<void> customStatement(String sql, [List<dynamic>? args]) async {
+    await transaction(() async {
+      await customUpdate(sql);
+    });
+  }
 }
 
 LazyDatabase _openConnection() {

@@ -15,6 +15,7 @@ import 'ui/screens/new_debt_screen.dart';
 import 'ui/screens/register_payment_screen.dart';
 import 'ui/screens/reports_screen.dart';
 import 'ui/screens/settings_screen.dart';
+import 'ui/screens/backup_screen.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -34,7 +35,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (ctx) => PaymentProvider(ctx.read<AppDatabase>())),
       ],
       child: MaterialApp(
-        title: 'Control de Deudas',
+        title: 'Mi Tienda',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.system,
         theme: _buildTheme(Brightness.light),
@@ -47,6 +48,7 @@ class MyApp extends StatelessWidget {
           RegisterPaymentScreen.routeName: (_) => const RegisterPaymentScreen(),
           ReportsScreen.routeName: (_) => const ReportsScreen(),
           SettingsScreen.routeName: (_) => const SettingsScreen(),
+          BackupScreen.routeName: (_) => const BackupScreen(),
         },
       ),
     );
